@@ -1,0 +1,34 @@
+module Consensus
+
+sig Values{}
+
+var sig chosen in Values{}
+
+fact Init{
+	no chosen
+}
+
+pred choose{
+	no chosen
+	one chosen'
+}
+
+pred nop{
+	chosen' = chosen
+}
+
+fact Next{
+	always(choose or nop)
+}
+
+fact WF_choose{
+	always((always no chosen) implies eventually choose)
+}
+
+run{
+	eventually some chosen
+} for exactly 5 Values
+
+check Sucess{
+	eventually some chosen
+}
