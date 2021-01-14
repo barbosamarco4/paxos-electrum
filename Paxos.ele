@@ -1,0 +1,18 @@
+open util/ordering[Ballot]
+
+sig Ballot{}
+
+sig Value{}
+
+sig Acceptor{}
+
+sig Quorum{
+	quorum: set Acceptor
+}
+
+var abstract sig Message{}
+
+var Message1a extends Message{}
+var Message1b extends Message{}
+var Message2a extends Message{}
+var Message2b extends Message{}
