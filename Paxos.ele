@@ -4,15 +4,143 @@ sig Ballot{}
 
 sig Value{}
 
-sig Acceptor{}
+sig Acceptor{
+	var maxBal: lone Ballot,
+	var maxVBal: lone Ballot,
+	var maxVal: lone Value,
+}
 
 sig Quorum{
 	quorum: set Acceptor
 }
 
-var abstract sig Message{}
+abstract sig Type{}
+one sig T1a, T1b, T2a, T2b extends Type{}
 
-var Message1a extends Message{}
-var Message1b extends Message{}
-var Message2a extends Message{}
-var Message2b extends Message{}
+var sig Message{
+	var type: one Type,
+	var bal:  one Ballot,
+	var acc:  lone Acceptor,
+	var val:  lone Value,
+	var mBal: lone Ballot,
+	var mVal: lone Value
+}
+
+fact Init{
+	no Message
+	no maxBal
+	no maxVBal
+	no maxVal
+	some Quorum
+	all q:Quorum | some q.quorum
+	all disj q1,q2:Quorum | some (q1.quorum & q2.quorum) and (q1.quorum != q2.quorum)
+	some Acceptor
+	some Ballot
+	
+}
+
+pred Phase1a[b:Ballot]{
+	one m : (Message'-Message){
+		type' = type + m->T1a
+		bal' = bal + m->b
+	}
+	maxBal' = maxBal
+	maxVBal' = maxVBal
+	maxVal' = maxVal
+	acc' = acc
+	val' = val
+	mBal' = mBal
+	mVal' = mVal
+}
+
+pred Phase1b[a:Acceptor]{
+	some m : Message{
+		m.type = T1a
+		gt[m.bal,a.maxBal] or no a.maxBal
+		maxBal' = maxBal ++ a->m.bal
+		one nm : (Message'-Message){
+			type' = type + nm ->T1b
+			bal' = bal + nm->m.bal
+			acc' = acc + nm->a
+			mBal' = mBal + nm->a.maxVBal
+			mVal' = mVal + nm->a.maxVal
+		}
+	}
+	maxVBal' = maxVBal
+	maxVal' = maxVal
+	val' = val
+}
+
+fun Q1b[q:Quorum,b:Ballot]: set Message{
+	let Q=q.quorum | {m : (type.T1b & bal.b & acc.Q)}
+}
+
+fun Q1bv[q:Quorum,b:Ballot] : set Message{
+		{m : Q1b[q,b] | some m.mBal}
+}
+
+pred Phase2a[b:Ballot, v:Value]{
+	no (type.T2a & bal.b)
+	some q:Quorum{
+		let Q=q.quorum, Q1bv = Q1bv[q,b], Q1b = Q1b[q,b]{
+			Q in Q1b.acc
+			no Q1bv or (mBal.(max[Q1bv.mBal])).mVal = v
+		}
+	}
+	one m : (Message'-Message){
+		type' = type + m->T2a
+		bal' = bal + m->b
+		val' = val + m->v
+	}
+	maxBal' = maxBal
+	maxVBal' = maxVBal
+	maxVal' = maxVal
+	acc' = acc
+	mBal' = mBal
+	mVal' = mVal
+}
+
+pred Phase2b[a:Acceptor]{
+	some m : (type.T2a) {
+		gte[m.bal,a.maxBal] or no a.maxBal
+		maxBal'  = maxBal  ++ a->m.bal
+		maxVBal' = maxVBal ++ a->m.bal
+		maxVal'  = maxVal  ++ a->m.val
+		one nm : (Message' - Message){
+			type' = type + nm->T2a
+			acc'  = acc  + nm->a
+			bal'  = bal  + nm->m.bal
+			val'  = val  + nm->m.val
+		} 
+	}
+	mBal' = mBal
+	mVal' = mVal
+}
+
+pred skip{
+	maxBal' = maxBal
+	maxVBal' = maxVBal
+	maxVal' = maxVal
+
+	type' = type
+	bal' = bal
+	acc' = acc
+	val' = val
+	mBal' = mBal
+	mVal' = mVal
+}
+
+fact Next{
+	always ((some b:Ballot | Phase1a[b] or some v:Value | Phase2a[b,v]) or (some a:Acceptor | Phase1b[a] or Phase2b[a]) or skip)
+}
+
+run Example{
+	eventually {
+	some b:Ballot, a:Acceptor{
+		Phase1a[b]
+		eventually Phase1b[a]
+		eventually some v:Value | Phase2a[b,v]
+		eventually Phase2b[a]
+	}
+	}
+} for 3 but exactly 4 Type, 15 Message
